@@ -1,5 +1,7 @@
 
 import dns from "node:dns";
+import cors from "cors";
+import companyRoutes from "./routes/companyRoutes.js";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 import propertyRoutes from "./routes/propertyRoutes.js";
@@ -13,7 +15,9 @@ import Property from "./models/Property.js";
 dotenv.config();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
+app.use("/api/companies", companyRoutes);
 app.use("/api/properties", propertyRoutes);
 
 app.get("/", (req, res) => {
