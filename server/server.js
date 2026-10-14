@@ -2,6 +2,7 @@
 import dns from "node:dns";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
+import propertyRoutes from "./routes/propertyRoutes.js";
 
 import dotenv from "dotenv";
 import express from "express";
@@ -13,6 +14,7 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
+app.use("/api/properties", propertyRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Property Management API is running" });
