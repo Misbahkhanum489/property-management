@@ -6,6 +6,8 @@ const API_URL = "http://localhost:5000/api/properties";
 
 const COMPANY_UNIT_LIMITS = {
   company001: 12,
+  company002: 10,
+  company003: 12,
 };
 
 const initialForm = {
@@ -958,7 +960,9 @@ function App() {
                       required
                     />
                     <small className="field-help">
-                      The configured limit for company001 is 12 units.
+                      {COMPANY_UNIT_LIMITS[form.companyId.trim()] !== undefined
+                      ? `This company can register a maximum of ${COMPANY_UNIT_LIMITS[form.companyId.trim()]} units.`
+                      : "No unit limit is configured for this company."}
                     </small>
                   </div>
 

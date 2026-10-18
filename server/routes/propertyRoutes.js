@@ -7,9 +7,11 @@ const router = express.Router();
 
 const COMPANY_UNIT_LIMITS = {
   company001: 12,
+  company002: 10,
+  company003: 12,
 };
 
-// Convert old Maintenance records to Occupied.
+// Convert legacy Maintenance records to Occupied.
 let migrationPromise = null;
 
 async function migrateMaintenanceRecords() {
@@ -30,10 +32,77 @@ function isValidStatus(status) {
   return status === "Occupied" || status === "Vacant";
 }
 
-// ADD a new unit.
-// POST /api/properties
+function validateUnitInput(body, isUpdate = false) {
+  const errors = [];
+
+  if (
+    !isUpdate &&
+    (typeof body.companyId !== "string" || !body.companyId.trim())
+  ) {
+    errors.push("Company ID is required.");
+  }
+
+  if (
+    !isUpdate &&
+    (typeof body.propertyName !== "string" || !body.propertyName.trim())
+  ) {
+    errors.push("Property name is required.");
+  }
+
+  if (
+    body.unitNumber !== undefined &&
+    (typeof body.unitNumber !== "string" || !body.unitNumber.trim())
+  ) {
+    errors.push("Unit number cannot be empty.");
+  }
+
+  if (
+    !isUpdate &&
+    (body.unitNumber === undefined ||
+      typeof body.unitNumber !== "string" ||
+      !body.unitNumber.trim())
+  ) {
+    if (!errors.includes("Unit number cannot be empty.")) {
+      errors.push("Unit number is required.");
+    }
+  }
+
+  if (
+    body.annualRent !== undefined &&
+    (body.annualRent === "" ||
+      body.annualRent === null ||
+      !Number.isFinite(Number(body.annualRent)) ||
+      Number(body.annualRent) < 0)
+  ) {
+    errors.push("Annual rent must be a valid non-negative number.");
+  }
+
+  if (
+    !isUpdate &&
+    (body.annualRent === undefined || body.annualRent === "")
+  ) {
+    errors.push("Annual rent is required.");
+  }
+
+  if (body.status !== undefined && !isValidStatus(body.status)) {
+    errors.push("Status must be Occupied or Vacant.");
+  }
+
+  return errors;
+}
+
+// POST /api/properties — add a unit.
 router.post("/", async (req, res) => {
   try {
+    const errors = validateUnitInput(req.body);
+
+    if (errors.length) {
+      return res.status(400).json({
+        message: errors[0],
+        errors,
+      });
+    }
+
     const {
       companyId,
       propertyName,
@@ -45,29 +114,11 @@ router.post("/", async (req, res) => {
       status,
     } = req.body;
 
-    if (
-      typeof companyId !== "string" ||
-      !companyId.trim() ||
-      typeof unitNumber !== "string" ||
-      !unitNumber.trim()
-    ) {
-      return res.status(400).json({
-        message: "Company ID and unit number are required.",
-      });
-    }
-
     const normalizedCompanyId = companyId.trim();
     const normalizedUnitNumber = unitNumber.trim();
 
-    if (status !== undefined && !isValidStatus(status)) {
-      return res.status(400).json({
-        message: "Status must be Occupied or Vacant.",
-      });
-    }
-
     await migrateMaintenanceRecords();
 
-    // Enforce the company's unit limit on the server.
     const unitLimit = COMPANY_UNIT_LIMITS[normalizedCompanyId];
 
     if (unitLimit !== undefined) {
@@ -86,13 +137,13 @@ router.post("/", async (req, res) => {
 
     const property = await Property.create({
       companyId: normalizedCompanyId,
-      propertyName,
+      propertyName: propertyName.trim(),
       buildingNumber,
       unitNumber: normalizedUnitNumber,
-      tenantName: tenantName || "",
-      tenantContact: tenantContact || "",
-      annualRent,
-      status: status || "Vacant",
+      tenantName: tenantName ?? "",
+      tenantContact: tenantContact ?? "",
+      annualRent: Number(annualRent),
+      status: status ?? "Vacant",
     });
 
     return res.status(201).json({
@@ -111,7 +162,10 @@ router.post("/", async (req, res) => {
       error.name === "CastError"
     ) {
       return res.status(400).json({
-        message: error.message,
+        message: "Please check the submitted unit details.",
+        errors: Object.values(error.errors ?? {}).map(
+          (item) => item.message
+        ),
       });
     }
 
@@ -123,8 +177,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET units for one company.
-// GET /api/properties?companyId=company001
+// GET /api/properties?companyId=COMP_001 — list one company's units.
 router.get("/", async (req, res) => {
   try {
     const { companyId } = req.query;
@@ -139,6 +192,7 @@ router.get("/", async (req, res) => {
 
     const normalizedCompanyId = companyId.trim();
 
+    // Always filter by companyId to prevent cross-company data mixing.
     const properties = await Property.find({
       companyId: normalizedCompanyId,
     }).sort({ createdAt: 1, _id: 1 });
@@ -163,23 +217,11 @@ router.get("/", async (req, res) => {
   }
 });
 
-// EDIT an existing unit.
-// PUT /api/properties/:id
-// Include companyId in the request body.
+// PUT /api/properties/:id — edit a unit belonging to the specified company.
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
-    const {
-      companyId,
-      propertyName,
-      buildingNumber,
-      unitNumber,
-      tenantName,
-      tenantContact,
-      annualRent,
-      status,
-    } = req.body;
+    const { companyId } = req.body;
 
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
@@ -187,41 +229,59 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    if (
-      typeof companyId !== "string" ||
-      !companyId.trim()
-    ) {
+    if (typeof companyId !== "string" || !companyId.trim()) {
       return res.status(400).json({
         message: "Company ID is required.",
       });
     }
 
-    if (status !== undefined && !isValidStatus(status)) {
-      return res.status(400).json({
-        message: "Status must be Occupied or Vacant.",
-      });
-    }
+    const errors = validateUnitInput(req.body, true);
 
-    if (
-      unitNumber !== undefined &&
-      (typeof unitNumber !== "string" || !unitNumber.trim())
-    ) {
+    if (errors.length) {
       return res.status(400).json({
-        message: "Unit number cannot be empty.",
+        message: errors[0],
+        errors,
       });
     }
 
     await migrateMaintenanceRecords();
 
     const updates = {};
+    const fields = [
+      "propertyName",
+      "buildingNumber",
+      "unitNumber",
+      "tenantName",
+      "tenantContact",
+      "annualRent",
+      "status",
+    ];
 
-    if (propertyName !== undefined) updates.propertyName = propertyName;
-    if (buildingNumber !== undefined) updates.buildingNumber = buildingNumber;
-    if (unitNumber !== undefined) updates.unitNumber = unitNumber.trim();
-    if (tenantName !== undefined) updates.tenantName = tenantName;
-    if (tenantContact !== undefined) updates.tenantContact = tenantContact;
-    if (annualRent !== undefined) updates.annualRent = annualRent;
-    if (status !== undefined) updates.status = status;
+    for (const field of fields) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    }
+
+    if (updates.propertyName !== undefined) {
+      if (
+        typeof updates.propertyName !== "string" ||
+        !updates.propertyName.trim()
+      ) {
+        return res.status(400).json({
+          message: "Property name cannot be empty.",
+        });
+      }
+      updates.propertyName = updates.propertyName.trim();
+    }
+
+    if (updates.unitNumber !== undefined) {
+      updates.unitNumber = updates.unitNumber.trim();
+    }
+
+    if (updates.annualRent !== undefined) {
+      updates.annualRent = Number(updates.annualRent);
+    }
 
     const property = await Property.findOneAndUpdate(
       {
@@ -257,7 +317,10 @@ router.put("/:id", async (req, res) => {
       error.name === "CastError"
     ) {
       return res.status(400).json({
-        message: error.message,
+        message: "Please check the submitted unit details.",
+        errors: Object.values(error.errors ?? {}).map(
+          (item) => item.message
+        ),
       });
     }
 
