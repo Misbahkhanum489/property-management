@@ -1205,5 +1205,40 @@ textarea:focus-visible {
   .limit-message {
   margin-bottom: 16px;
   }
+  .property-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  }
+  .property-filters .search-box {
+  flex: 1;
+  min-width: 200px;
+  }
+  .status-filter {
+  min-width: 145px;
+  padding: 11px 14px;
+  border: 1px solid #dce2ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #263244;
+  font: inherit;
+  outline: none;
+  }
+  .status-filter:focus {
+  border-color: #6479e8;
+  box-shadow: 0 0 0 3px rgba(100, 121, 232, 0.12);
+  }
+  @media (max-width: 600px) {
+  .property-filters {
+    width: 100%;
+   }
+
+  .property-filters .search-box,
+  .status-filter {
+    width: 100%;
+    min-width: 0;
+  }
+}
   
 }

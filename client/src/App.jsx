@@ -201,6 +201,7 @@ function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [form, setForm] = useState(initialForm);
   const [editingProperty, setEditingProperty] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -272,15 +273,15 @@ function App() {
     );
 
   const filteredProperties = properties.filter((property) => {
-    const query = search.toLowerCase();
+    const query = search.trim().toLowerCase();
+    const unitNumber = String(property.unitNumber || "").toLowerCase();
+    const status = normalizedStatus(property.status);
 
-    return [
-      property.propertyName,
-      property.buildingNumber,
-      property.unitNumber,
-      property.tenantName,
-      normalizedStatus(property.status),
-    ].some((value) => String(value || "").toLowerCase().includes(query));
+    const matchesUnitNumber = unitNumber.includes(query);
+    const matchesStatus =
+    statusFilter === "All" || status === statusFilter;
+
+    return matchesUnitNumber && matchesStatus;
   });
 
   function handleChange(event) {
@@ -801,14 +802,25 @@ function App() {
                   </div>
 
                   <div className="search-box">
-                    <span>⌕</span>
-                    <input
-                      type="search"
-                      placeholder="Search properties or tenants..."
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                    />
-                  </div>
+                     <span>⌕</span>
+    <input
+      type="search"
+      placeholder="Search by unit number..."
+      value={search}
+      onChange={(event) => setSearch(event.target.value)}
+    />
+  </div>
+
+  <select
+    className="status-filter"
+    value={statusFilter}
+    onChange={(event) => setStatusFilter(event.target.value)}
+    aria-label="Filter units by status"
+  >
+    <option value="All">All Statuses</option>
+    <option value="Vacant">Vacant</option>
+    <option value="Occupied">Occupied</option>
+  </select>
                 </div>
 
                 <PropertyTable />
